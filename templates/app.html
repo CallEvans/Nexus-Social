@@ -1,1 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Social</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="app-body" data-page="{{ page }}">
 
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-icon">✦</div>
+    <span class="logo-text">Nexus<em>Social</em></span>
+  </div>
+  <div class="search-wrap">
+    <div class="search-bar" id="searchBar">
+      <span class="si">🔍</span>
+      <input id="searchInput" placeholder="Search users, groups, #FT15-X4..." autocomplete="off" />
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="topbar-right">
+    <div class="icon-btn" id="notifBtn" onclick="goTo('notifications')">
+      🔔
+      <div class="badge" id="notifBadge" style="display:none;">0</div>
+    </div>
+    <div class="icon-btn" onclick="goTo('messages')">
+      💬
+      <div class="badge" id="msgBadge" style="display:none;">0</div>
+    </div>
+    <div class="user-av topbar-av" onclick="goTo('profile')" data-initials="{{ user.full_name[0] if user else 'U' }}">
+      {% if user and user.avatar_url %}
+      <img src="{{ user.avatar_url }}" alt="avatar" />
+      {% else %}
+      {{ user.full_name[0] if user else 'U' }}
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<div class="app-layout">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-items">
+      <div class="nav-item {% if page=='feed' %}active{% endif %}" onclick="goTo('feed')" data-page="feed">
+        <span class="ni">🏠</span><span class="nl">Home</span>
+      </div>
+      <div class="nav-item {% if page=='messages' %}active{% endif %}" onclick="goTo('messages')" data-page="messages">
+        <span class="ni">💬</span><span class="nl">Messages</span>
+      </div>
+      <div class="nav-item {% if page=='groups' %}active{% endif %}" onclick="goTo('groups')" data-page="groups">
+        <span class="ni">👥</span><span class="nl">Groups</span>
+      </div>
+      <div class="nav-item {% if page=='notifications' %}active{% endif %}" onclick="goTo('notifications')" data-page="notifications">
+        <span class="ni">🔔</span><span class="nl">Alerts</span>
+      </div>
+    </div>
+    <div class="nav-bottom">
+      <div class="nav-item {% if page=='profile' %}active{% endif %}" onclick="goTo('profile')" data-page="profile">
+        <span class="ni">👤</span><span class="nl">Profile</span>
+      </div>
+      <div class="nav-item" onclick="confirmLogout()">
+        <span class="ni">🚪</span><span class="nl">Logout</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="mainContent">
+    <div class="loading-screen" id="loadingScreen">
+      <div class="loader-logo">✦</div>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL OVERLAY -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal()"></div>
+<div class="modal" id="modal"></div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  const CURRENT_USER = {{ user | tojson }};
+  const CURRENT_PAGE = "{{ page }}";
+  const PROFILE_USER = {{ profile_user | tojson if profile_user is defined else 'null' }};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="/static/js/socket.js"></script>
+<script src="/static/js/api.js"></script>
+<script src="/static/js/ui.js"></script>
+<script src="/static/js/feed.js"></script>
+<script src="/static/js/messages.js"></script>
+<script src="/static/js/groups.js"></script>
+<script src="/static/js/notifications.js"></script>
+<script src="/static/js/profile.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

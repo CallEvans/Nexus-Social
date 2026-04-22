@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if mode == 'register' %}Join{% else %}Sign In{% endif %} — Nexus Social</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body class="auth-page">
+  <a href="/" class="auth-back">← Back</a>
+  <div class="auth-bg-glow"></div>
+
+  <div class="auth-container">
+    <div class="auth-box" id="authBox">
+      <div class="auth-logo">
+        <div class="logo-icon">✦</div>
+        <span>Nexus<em>Social</em></span>
+      </div>
+
+      {% if mode == 'register' %}
+      <div class="auth-title">Create your account</div>
+      <div class="auth-sub">Join the network · Get your unique Nexus ID ✦</div>
+
+      <form id="registerForm" class="auth-form">
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Full Name <span class="req">*</span></label>
+            <input class="fi" name="full_name" placeholder="Your full name" required />
+          </div>
+          <div class="fg">
+            <label class="fl">Username <span class="req">*</span></label>
+            <input class="fi" name="username" placeholder="@handle" required />
+            <div class="fhint accent">✦ How people find you</div>
+          </div>
+        </div>
+        <div class="fg">
+          <label class="fl">Email <span class="req">*</span></label>
+          <input class="fi" name="email" type="email" placeholder="you@email.com" required />
+        </div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Password <span class="req">*</span></label>
+            <input class="fi" name="password" type="password" placeholder="Min 6 characters" required />
+          </div>
+          <div class="fg">
+            <label class="fl">Age <span class="req">*</span></label>
+            <input class="fi" name="age" type="number" placeholder="Your age" min="13" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Gender <span class="req">*</span></label>
+            <select class="fi" name="gender" required>
+              <option value="">Select</option>
+              <option>Male</option><option>Female</option><option>Non-binary</option>
+              <option>Genderfluid</option><option>Agender</option><option>Prefer not to say</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="fl">Pronouns <span class="req">*</span></label>
+            <select class="fi" name="pronouns" required>
+              <option>he/him</option><option>she/her</option><option>they/them</option>
+              <option>he/they</option><option>she/they</option><option>any/all</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Sexuality <span class="req">*</span></label>
+            <select class="fi" name="sexuality" required>
+              <option>Straight</option><option>Gay</option><option>Lesbian</option>
+              <option>Bisexual</option><option>Pansexual</option><option>Asexual</option>
+              <option>Queer</option><option>Prefer not to say</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="fl">Country</label>
+            <select class="fi" name="country">
+              <option value="">Select country</option>
+              <option value="MU">🇲🇺 Mauritius</option>
+              <option value="US">🇺🇸 United States</option>
+              <option value="GB">🇬🇧 United Kingdom</option>
+              <option value="FR">🇫🇷 France</option>
+              <option value="BR">🇧🇷 Brazil</option>
+              <option value="IN">🇮🇳 India</option>
+              <option value="AU">🇦🇺 Australia</option>
+              <option value="CA">🇨🇦 Canada</option>
+              <option value="DE">🇩🇪 Germany</option>
+              <option value="JP">🇯🇵 Japan</option>
+              <option value="KR">🇰🇷 South Korea</option>
+              <option value="IT">🇮🇹 Italy</option>
+              <option value="ZA">🇿🇦 South Africa</option>
+              <option value="NG">🇳🇬 Nigeria</option>
+              <option value="GH">🇬🇭 Ghana</option>
+            </select>
+          </div>
+        </div>
+        <div class="fhint" style="margin-top:4px;">✉️ A confirmation email will be sent. Your Nexus ID will be assigned automatically.</div>
+        <div id="authError" class="auth-error" style="display:none;"></div>
+        <button type="submit" class="auth-submit">Create Account → Get my Nexus ID</button>
+        <div class="auth-switch">Already have an account? <a href="/login">Sign in</a></div>
+      </form>
+
+      {% else %}
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to your Nexus account</div>
+
+      <form id="loginForm" class="auth-form">
+        <div class="fg">
+          <label class="fl">Email</label>
+          <input class="fi" name="email" type="email" placeholder="you@email.com" required />
+        </div>
+        <div class="fg">
+          <label class="fl">Password</label>
+          <input class="fi" name="password" type="password" placeholder="Your password" required />
+        </div>
+        <div id="authError" class="auth-error" style="display:none;"></div>
+        <button type="submit" class="auth-submit">Sign In ✦</button>
+        <div class="auth-switch">New to Nexus? <a href="/register">Create account</a></div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+  const mode = "{{ mode }}";
+  </script>
+  <script src="/static/js/auth.js"></script>
+</body>
+</html>
