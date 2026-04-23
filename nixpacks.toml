@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["python311", "gcc"]
+nixPkgs = ["python311", "gcc", "stdenv.cc.cc.lib"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = ["pip install --upgrade pip setuptools", "pip install -r requirements.txt"]
 
 [start]
-cmd = "gunicorn --worker-class eventlet -w 1 app:app"
+cmd = "gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT app:app"
