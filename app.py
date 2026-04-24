@@ -83,7 +83,7 @@ def index():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        data = request.form
+        data = request.get_json() or request.form
         email = data.get("email", "").strip().lower()
         password = data.get("password", "")
         username = data.get("username", "").strip().lower()
