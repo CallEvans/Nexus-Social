@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c6fff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6b9d;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="innerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
+      <stop offset="100%" style="stop-color:#e8d9ff;stop-opacity:0.95" />
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4aa;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c6fff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6b9d;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#7c6fff" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Outer ring -->
+  <circle cx="100" cy="100" r="96" fill="none" stroke="url(#ringGrad)" stroke-width="3" opacity="0.6"/>
+
+  <!-- Main background circle -->
+  <circle cx="100" cy="100" r="86" fill="url(#bgGrad)" filter="url(#softShadow)"/>
+
+  <!-- Inner subtle circle -->
+  <circle cx="100" cy="100" r="86" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+  <!-- N lettermark -->
+  <g filter="url(#glow)">
+    <rect x="54" y="62" width="18" height="76" rx="5" fill="url(#innerGrad)"/>
+    <rect x="128" y="62" width="18" height="76" rx="5" fill="url(#innerGrad)"/>
+    <polygon points="72,62 90,62 146,138 128,138" fill="url(#innerGrad)"/>
+  </g>
+
+  <!-- Star accent -->
+  <g transform="translate(148,52)" filter="url(#glow)">
+    <path d="M8,0 L9.5,5.5 L15,7 L9.5,8.5 L8,14 L6.5,8.5 L1,7 L6.5,5.5 Z" fill="#ffffff" opacity="0.9"/>
+  </g>
+
+  <!-- Dot accents -->
+  <circle cx="52" cy="148" r="5" fill="#00d4aa" opacity="0.85" filter="url(#glow)"/>
+  <circle cx="148" cy="148" r="3" fill="#ff6b9d" opacity="0.7"/>
+</svg>
