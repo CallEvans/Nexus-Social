@@ -1,4 +1,3 @@
-<img src="static/img/logo.svg" width="100" alt="Nexus Social"/>
 # ✦ Nexus Social
 
 > *Find your people.*
