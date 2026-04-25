@@ -1,211 +1,202 @@
 // Nexus Social — Profile
 async function loadProfile(profileUser) {
-  const user  = profileUser || CURRENT_USER;
-  const isOwn = user.id === CURRENT_USER.id;
-  const g     = gradientForString(user.username || 'u');
-  const init  = (user.full_name || 'U')[0];
-  const flag  = user.country ? countryFlag(user.country) : '';
-  const avContent = user.avatar_url
-    ? `<img src="${user.avatar_url}" alt="${init}"/>`
-    : init;
-  const links = (user.personal_links || []).map(l =>
-    `<a class="link-pill" href="${l.url||l}" target="_blank" rel="noopener">🔗 ${l.label||l.url||l}</a>`
-  ).join('');
+    const user = profileUser || CURRENT_USER;
+    const isOwn = user.id === CURRENT_USER.id;
+    const g = gradientForString(user.username || 'u');
+    const init = (user.full_name || 'U')[0];
+    const flag = user.country ? countryFlag(user.country) : '';
+    const avContent = user.avatar_url
+        ? `<img src="${user.avatar_url}" alt="${init}" style="width:100%;height:100%;object-fit:cover;">`
+        : init;
 
-  const content = document.getElementById('pageContent');
-  content.innerHTML = `
-    <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-      <div class="profile-wrap">
-        <div class="profile-banner">
-          <div class="profile-av-wrap">
-            <div class="profile-av ${g}">
-              ${avContent}
-              ${isOwn ? '<div class="profile-av-online"></div>' : ''}
+    // Build personal links safely
+    const links = (user.personal_links || [])
+        .filter(l => l && (l.url || l.label))
+        .map(l => {
+            const label = l.label || l.url || '';
+            const url = l.url || '#';
+            return `<a href="${url}" target="_blank" rel="noopener" class="p-link">${label}</a>`;
+        })
+        .join('');
+
+    const content = document.getElementById('pageContent');
+    content.innerHTML = `
+        <div class="profile-page">
+            <div class="p-header">
+                <div class="p-avatar-wrap">
+                    <div class="p-av ${g}" style="width:80px;height:80px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;font-family:'Syne',sans-serif;overflow:hidden;">
+                        ${avContent}
+                    </div>
+                    ${isOwn ? '<div class="p-av-overlay" onclick="editProfileModal()">✏️</div>' : ''}
+                </div>
+                <div class="p-actions">
+                    ${isOwn
+                        ? `<button class="btn-pill" onclick="editProfileModal()">Edit Profile</button>`
+                        : `<button class="btn-pill primary" onclick="addFriendProfile('${user.id}','${user.full_name}')">Add Friend ✦</button>
+                           <button class="btn-pill" onclick="startDm('${user.id}','${user.username}')">Message</button>`
+                    }
+                </div>
             </div>
-          </div>
-          <div class="profile-top-actions">
-            ${isOwn
-              ? `<button class="btn btn-ghost btn-sm" onclick="editProfileModal()">Edit Profile</button>`
-              : `<button class="btn btn-primary btn-sm" onclick="addFriendProfile('${user.id}','${user.full_name}')">Add Friend ✦</button>
-                 <button class="btn btn-ghost btn-sm" onclick="startDm('${user.id}','${user.username}')">Message</button>`
-            }
-          </div>
+
+            <div class="p-main">
+                <div class="p-name-row">
+                    <h1 class="p-name">${user.full_name} ${flag}</h1>
+                    <span class="p-pronouns">@${user.username} · ${user.pronouns || ''}</span>
+                </div>
+                <div class="p-nexus">Nexus ID: #${user.nexus_id}${user.nexus_id === '000001' ? ' · <span class="badge-original">Original Member ⭐</span>' : ''}</div>
+
+                <div class="p-stats">
+                    <div class="p-stat">
+                        <span class="p-stat-n" id="pFriends">—</span>
+                        <span class="p-stat-l">Friends</span>
+                    </div>
+                    <div class="p-stat">
+                        <span class="p-stat-n">—</span>
+                        <span class="p-stat-l">Groups</span>
+                    </div>
+                    <div class="p-stat">
+                        <span class="p-stat-n">${user.age || '—'}</span>
+                        <span class="p-stat-l">Age</span>
+                    </div>
+                </div>
+
+                ${user.bio ? `<div class="p-bio">${user.bio}</div>` : ''}
+
+                <div class="p-details">
+                    ${user.gender ? `<span class="p-tag">${user.gender}</span>` : ''}
+                    ${user.sexuality && user.sexuality !== 'Prefer not to say' ? `<span class="p-tag">${user.sexuality}</span>` : ''}
+                    ${user.pronouns ? `<span class="p-tag">✦ ${user.pronouns}</span>` : ''}
+                </div>
+
+                ${links ? `<div class="p-links">${links}</div>` : ''}
+
+                <div class="p-footer-actions">
+                    ${isOwn
+                        ? `<button class="btn-pill danger" onclick="editProfileModal()">✏️ Edit Profile</button>
+                           <button class="btn-pill danger-outline" onclick="deleteAccount()">⚠️ Delete Account</button>`
+                        : `<button class="btn-pill danger-outline" onclick="reportUser('${user.id}')">🚩 Report</button>`
+                    }
+                </div>
+            </div>
         </div>
+    `;
 
-        <div class="profile-name">${user.full_name} ${flag}</div>
-        <div class="profile-handle">@${user.username} · ${user.pronouns || ''}</div>
-        <div class="uid-badge">🪪 Nexus ID: <strong>#${user.nexus_id}</strong>${user.nexus_id === '000001' ? ' · Original Member ⭐' : ''}</div>
-
-        <div class="profile-stats">
-          <div class="ps"><div class="ps-n" id="pFriends">—</div><div class="ps-l">Friends</div></div>
-          <div class="ps"><div class="ps-n" id="pGroups">—</div><div class="ps-l">Groups</div></div>
-          <div class="ps"><div class="ps-n">${user.age || '—'}</div><div class="ps-l">Age</div></div>
-        </div>
-
-        ${user.bio ? `<p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px;">${user.bio}</p>` : ''}
-
-        <div class="profile-chips">
-          ${user.gender ? `<div class="p-chip">${user.gender}</div>` : ''}
-          ${user.sexuality && user.sexuality !== 'Prefer not to say' ? `<div class="p-chip">${user.sexuality}</div>` : ''}
-          ${user.pronouns ? `<div class="p-chip">✦ ${user.pronouns}</div>` : ''}
-        </div>
-
-        ${links ? `<div class="links-row">${links}</div>` : ''}
-
-        ${isOwn ? `
-          <div style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-ghost btn-sm" onclick="editProfileModal()">✏️ Edit Profile</button>
-            <button class="btn btn-danger btn-sm" onclick="dangerZoneModal()">⚠️ Delete Account</button>
-          </div>
-        ` : `
-          <button class="btn btn-danger btn-sm" style="margin-top:10px;" onclick="reportUser('${user.id}')">🚨 Report</button>
-        `}
-      </div>
-    </div>
-  `;
-
-  // Load friend/group counts
-  try {
-    const friends = await API.get('/api/friends/list');
-    const el = document.getElementById('pFriends');
-    if (el) el.textContent = friends.length;
-  } catch(e) {}
+    // Load friend count
+    try {
+        const friends = await API.get('/api/friends/list');
+        const el = document.getElementById('pFriends');
+        if (el) el.textContent = friends.length;
+    } catch (e) {}
 }
 
 async function addFriendProfile(userId, name) {
-  try {
-    await API.post('/api/friends/request', { receiver_id: userId });
-    toast(`Friend request sent to ${name} ✦`, 'success');
-  } catch(e) { toast(e.message, 'error'); }
+    try {
+        await API.post('/api/friends/request', { receiver_id: userId });
+        toast(`Friend request sent to ${name} ✦`, 'success');
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 function startDm(userId, username) {
-  goTo('messages', { openUser: userId, openUsername: username });
+    goTo('messages', { openUser: userId, openUsername: username });
 }
 
 function editProfileModal() {
-  const u = CURRENT_USER;
-  openModal(`
-    <div class="modal-title">Edit Profile <button class="modal-close" onclick="closeModal()">×</button></div>
-    <div style="max-height:55vh;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:0;">
-      <div class="fg">
-        <label class="fl">Full Name</label>
-        <input class="fi" id="ep_name" value="${u.full_name||''}"/>
-      </div>
-      <div class="fg">
-        <label class="fl">Username</label>
-        <input class="fi" id="ep_user" value="${u.username||''}"/>
-      </div>
-      <div class="fg">
-        <label class="fl">Bio</label>
-        <textarea class="fi" id="ep_bio" style="height:68px;resize:none;">${u.bio||''}</textarea>
-      </div>
-      <div class="fg">
-        <label class="fl">Pronouns</label>
-        <select class="fi" id="ep_pronouns">
-          ${['he/him','she/her','they/them','he/they','she/they','any/all'].map(p =>
-            `<option ${u.pronouns===p?'selected':''}>${p}</option>`).join('')}
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">Profile Picture URL</label>
-        <input class="fi" id="ep_av" value="${u.avatar_url||''}" placeholder="https://…"/>
-        <div class="fhint">Or <label style="color:var(--accent);cursor:pointer;">upload file <input type="file" accept="image/*" style="display:none;" onchange="uploadAvatarFile(this)"/></label></div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:14px;">
-      <button class="btn btn-ghost" onclick="closeModal()" style="flex:1;">Cancel</button>
-      <button class="btn btn-primary" onclick="saveProfile()" style="flex:1;">Save ✦</button>
-    </div>
-  `);
+    const u = CURRENT_USER;
+    openModal(`
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Edit Profile</h3>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="field">
+                    <label>Full Name</label>
+                    <input id="epName" value="${u.full_name || ''}" placeholder="Your name">
+                </div>
+                <div class="field">
+                    <label>Username</label>
+                    <input id="epUsername" value="${u.username || ''}" placeholder="username">
+                </div>
+                <div class="field">
+                    <label>Bio</label>
+                    <textarea id="epBio" rows="3" placeholder="About you…">${u.bio || ''}</textarea>
+                </div>
+                <div class="field">
+                    <label>Pronouns</label>
+                    <select id="epPronouns">
+                        ${['he/him','she/her','they/them','he/they','she/they','any/all'].map(p =>
+                            `<option value="${p}" ${u.pronouns === p ? 'selected' : ''}>${p}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Profile Picture URL</label>
+                    <input id="epAvatar" value="${u.avatar_url || ''}" placeholder="https://…">
+                </div>
+                <div class="field">
+                    <label>Or upload file</label>
+                    <input type="file" accept="image/*" onchange="uploadAvatarFile(this)">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-pill" onclick="closeModal()">Cancel</button>
+                <button class="btn-pill primary" onclick="saveProfile()">Save ✦</button>
+            </div>
+        </div>
+    `);
 }
 
 async function uploadAvatarFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const fd = new FormData();
-  fd.append('file', file);
-  toast('Uploading…', 'info');
-  try {
-    const r = await fetch('/api/upload', { method: 'POST', body: fd });
-    const d = await r.json();
-    if (d.url) {
-      const el = document.getElementById('ep_av');
-      if (el) el.value = d.url;
-      toast('Avatar uploaded ✦', 'success');
+    const file = input.files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append('file', file);
+    toast('Uploading…', 'info');
+
+    try {
+        const r = await fetch('/api/upload', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (d.url) {
+            const el = document.getElementById('epAvatar');
+            if (el) el.value = d.url;
+            toast('Uploaded! ✦', 'success');
+        }
+    } catch (e) {
+        toast('Upload failed', 'error');
     }
-  } catch(e) { toast('Upload failed', 'error'); }
 }
 
 async function saveProfile() {
-  const data = {
-    full_name:  document.getElementById('ep_name')?.value.trim(),
-    username:   document.getElementById('ep_user')?.value.trim().toLowerCase(),
-    bio:        document.getElementById('ep_bio')?.value.trim(),
-    pronouns:   document.getElementById('ep_pronouns')?.value,
-    avatar_url: document.getElementById('ep_av')?.value.trim() || null,
-  };
-  try {
-    await API.post('/api/users/update-profile', data);
-    Object.assign(CURRENT_USER, data);
-    toast('Profile saved ✦', 'success');
-    closeModal();
-    loadProfile(CURRENT_USER);
-  } catch(e) { toast(e.message, 'error'); }
+    const data = {
+        full_name: document.getElementById('epName')?.value,
+        username: document.getElementById('epUsername')?.value,
+        bio: document.getElementById('epBio')?.value,
+        pronouns: document.getElementById('epPronouns')?.value,
+        avatar_url: document.getElementById('epAvatar')?.value,
+    };
+
+    try {
+        await API.post('/api/users/update-profile', data);
+        closeModal();
+        toast('Profile updated ✦', 'success');
+        // Reload profile
+        const newUser = { ...CURRENT_USER, ...data };
+        loadProfile(newUser);
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
-function dangerZoneModal() {
-  openModal(`
-    <div class="modal-title" style="color:var(--danger);">⚠️ Delete Account <button class="modal-close" onclick="closeModal()">×</button></div>
-    <p style="color:var(--text2);font-size:13px;line-height:1.6;margin-bottom:18px;">
-      This is permanent. All your data, messages, and groups will be deleted forever. This cannot be undone.
-    </p>
-    <div style="display:flex;gap:10px;">
-      <button class="btn btn-ghost" onclick="closeModal()" style="flex:1;">Cancel</button>
-      <button class="btn btn-danger" onclick="deleteMyAccount()" style="flex:1;">Delete Forever</button>
-    </div>
-  `);
-}
+async function deleteAccount() {
+    if (!confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
 
-async function deleteMyAccount() {
-  try {
-    await API.delete('/api/users/delete-account');
-    window.location.href = '/';
-  } catch(e) { toast('Could not delete account', 'error'); }
-}
-
-async function viewProfileModal(userId) {
-  try {
-    const u    = await API.get(`/api/users/profile/${userId}`);
-    const g    = gradientForString(u.username || 'u');
-    const init = (u.full_name || 'U')[0];
-    const flag = u.country ? countryFlag(u.country) : '';
-    const avContent = u.avatar_url
-      ? `<img src="${u.avatar_url}" alt="${init}" style="width:100%;height:100%;object-fit:cover;border-radius:14px;"/>`
-      : init;
-
-    openModal(`
-      <div class="modal-title">${u.full_name} <button class="modal-close" onclick="closeModal()">×</button></div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px 0 14px;">
-        <div class="${g}" style="width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;font-family:'Syne';overflow:hidden;">
-          ${avContent}
-        </div>
-        <div style="text-align:center;">
-          <div style="font-family:'Syne';font-weight:700;font-size:16px;">${u.full_name} ${flag}</div>
-          <div style="color:var(--text2);font-size:12px;margin-top:2px;">@${u.username}</div>
-          <div style="margin-top:4px;display:inline-block;background:linear-gradient(135deg,rgba(124,111,255,0.15),rgba(255,107,157,0.15));border:1px solid rgba(124,111,255,0.25);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;font-family:'Syne';color:var(--accent);">#${u.nexus_id}</div>
-          ${u.bio ? `<div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;">${u.bio}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-          ${u.pronouns ? `<div class="p-chip">${u.pronouns}</div>` : ''}
-          ${u.sexuality && u.sexuality !== 'Prefer not to say' ? `<div class="p-chip">${u.sexuality}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:8px;width:100%;margin-top:6px;">
-          <button class="btn btn-primary" style="flex:1;" onclick="addFriendProfile('${u.id}','${u.full_name}');closeModal()">Add Friend ✦</button>
-          <button class="btn btn-ghost" style="flex:1;" onclick="startDm('${u.id}','${u.username}');closeModal()">Message</button>
-          <button class="btn btn-danger" style="padding:8px 10px;" onclick="reportUser('${u.id}')">🚨</button>
-        </div>
-      </div>
-    `);
-  } catch(e) { toast('Could not load profile', 'error'); }
+    try {
+        await API.delete('/api/users/delete-account');
+        window.location.href = '/';
+    } catch (e) {
+        toast('Failed to delete account', 'error');
+    }
 }
