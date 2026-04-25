@@ -490,6 +490,91 @@ def mark_all_read():
     return jsonify({"success": True})
 
 
+@app.route("/api/notifications/<notif_id>/resolve", methods=["POST"])
+@login_required
+def resolve_notification(notif_id):
+    """Mark a notification as resolved so action buttons disappear."""
+    # Verify ownership
+    notif = supabase_admin.table("notifications").select("user_id,meta").eq("id", notif_id).single().execute()
+    if not notif.data or notif.data["user_id"] != session["user_id"]:
+        return jsonify({"error": "Not found"}), 404
+    meta = notif.data.get("meta") or {}
+    meta["resolved"] = True
+    supabase_admin.table("notifications").update({"read": True, "meta": meta}).eq("id", notif_id).execute()
+    return jsonify({"success": True})
+
+
+@app.route("/api/friends/pending")
+@login_required
+def get_pending_friends():
+    """Return pending friend requests received by current user."""
+    uid = session["user_id"]
+    res = supabase_admin.table("friendships").select("*").eq(
+        "receiver_id", uid).eq("status", "pending").execute()
+    return jsonify(res.data or [])
+
+
+# ─── API: Suggestions ─────────────────────────────────────────────────────────
+
+@app.route("/api/suggestions")
+@login_required
+def get_suggestions():
+    """Return people you may know based on shared attributes."""
+    uid  = session["user_id"]
+    user = get_current_user()
+    if not user:
+        return jsonify([])
+
+    # Get existing friends/requests to exclude
+    sent     = supabase_admin.table("friendships").select("receiver_id").eq("sender_id", uid).execute()
+    received = supabase_admin.table("friendships").select("sender_id").eq("receiver_id", uid).execute()
+    exclude  = {uid}
+    exclude.update(r["receiver_id"] for r in (sent.data or []))
+    exclude.update(r["sender_id"]   for r in (received.data or []))
+
+    suggestions = []
+    seen_ids    = set()
+
+    def add_suggestion(u, reasons):
+        if u["id"] in seen_ids or u["id"] in exclude:
+            return
+        seen_ids.add(u["id"])
+        u["match_reasons"] = reasons
+        suggestions.append(u)
+
+    fields = "id,nexus_id,username,full_name,avatar_url,bio,country,pronouns,sexuality,gender"
+
+    # Same country
+    if user.get("country"):
+        res = supabase_admin.table("users").select(fields).eq(
+            "country", user["country"]).neq("id", uid).limit(12).execute()
+        for u in (res.data or []):
+            add_suggestion(u, ["country"])
+
+    # Same sexuality
+    if user.get("sexuality") and user["sexuality"] not in ("Prefer not to say", ""):
+        res = supabase_admin.table("users").select(fields).eq(
+            "sexuality", user["sexuality"]).neq("id", uid).limit(8).execute()
+        for u in (res.data or []):
+            add_suggestion(u, ["sexuality"])
+
+    # Same gender
+    if user.get("gender"):
+        res = supabase_admin.table("users").select(fields).eq(
+            "gender", user["gender"]).neq("id", uid).limit(6).execute()
+        for u in (res.data or []):
+            add_suggestion(u, ["gender"])
+
+    # Fill with recent users if still few results
+    if len(suggestions) < 8:
+        res = supabase_admin.table("users").select(fields).neq(
+            "id", uid).order("created_at", desc=True).limit(20).execute()
+        for u in (res.data or []):
+            add_suggestion(u, ["new"])
+
+    return jsonify(suggestions[:24])
+
+
 # ─── API: Posts ───────────────────────────────────────────────────────────────
 
 @app.route("/api/posts/create", methods=["POST"])
