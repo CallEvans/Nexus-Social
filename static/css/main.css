@@ -267,3 +267,36 @@ select.fi { cursor: pointer; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(0,230,118,0.4); }
   50% { box-shadow: 0 0 0 5px rgba(0,230,118,0); }
 }
+
+/* ── Auth fit-screen fix ──────────────────── */
+.auth-page {
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px 16px;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(124,111,255,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 80%, rgba(255,107,157,0.07) 0%, transparent 60%);
+}
+.auth-container {
+  width: 100%;
+  max-width: 500px;
+  padding: 10px 0 30px;
+}
+.auth-box {
+  padding: clamp(18px, 4vw, 28px);
+}
+.auth-logo {
+  font-size: clamp(18px, 4vw, 22px);
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 420px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+.auth-submit { margin-top: 10px; }
