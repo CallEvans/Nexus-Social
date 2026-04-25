@@ -2,40 +2,207 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Nexus Social — Find Your People</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/main.css">
-</head>
-<body class="landing-page">
-  <nav class="landing-nav">
-    <div class="logo"><div class="logo-icon">✦</div><span class="logo-text">Nexus<em>Social</em></span></div>
-    <div class="nav-links">
-      <a href="/login" class="btn-ghost-nav">Sign In</a>
-      <a href="/register" class="btn-primary-nav">Get Started ✦</a>
-    </div>
-  </nav>
+<link rel="icon" type="image/svg+xml" href="/static/img/logo-small.svg"/>
+<meta property="og:title" content="Nexus Social"/>
+<meta property="og:description" content="Real connections. Real identity. Get your unique Nexus ID."/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#07080f; --bg2:#0c0e1a; --panel:#161928; --panel2:#1c2035;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.11);
+  --accent:#7c6fff; --accent2:#ff6b9d; --accent3:#00d4aa;
+  --glow:rgba(124,111,255,0.3); --text:#eceeff; --text2:#8890b0; --text3:#454b68;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:'DM Sans',sans-serif;
+  display:flex; flex-direction:column;
+}
+/* grid bg */
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(124,111,255,0.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(124,111,255,0.04) 1px,transparent 1px);
+  background-size:50px 50px;
+  mask-image:radial-gradient(ellipse at center,black 40%,transparent 80%);
+}
+/* glow */
+body::after{
+  content:''; position:fixed; top:-30%; left:50%; transform:translateX(-50%);
+  width:min(800px,120vw); height:600px; pointer-events:none; z-index:0;
+  background:radial-gradient(ellipse,rgba(124,111,255,0.14) 0%,transparent 70%);
+}
 
-  <div class="hero">
-    <div class="hero-glow"></div>
-    <div class="hero-grid"></div>
-    <div class="hero-content">
-      <div class="hero-badge">✦ Real connections. Real identity.</div>
-      <h1 class="hero-title">Your world,<br><em>connected.</em></h1>
-      <p class="hero-sub">Nexus Social is where real people build real friendships. Every member gets a unique Nexus ID — yours forever.</p>
-      <div class="hero-cta">
-        <a href="/register" class="cta-primary">Create Your Account ✦</a>
-        <a href="/login" class="cta-secondary">I already have one</a>
-      </div>
-      <div class="hero-stats">
-        <div class="hs"><span class="hs-n">2.4k+</span><span class="hs-l">Members</span></div>
-        <div class="hs-div"></div>
-        <div class="hs"><span class="hs-n">47</span><span class="hs-l">Countries</span></div>
-        <div class="hs-div"></div>
-        <div class="hs"><span class="hs-n">Real-time</span><span class="hs-l">Chat</span></div>
-      </div>
+nav{
+  position:relative; z-index:10;
+  display:flex; align-items:center; padding:14px clamp(16px,4vw,40px);
+  background:rgba(7,8,15,0.92); backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.logo{display:flex;align-items:center;gap:8px;}
+.logo img{border-radius:7px; flex-shrink:0;}
+.logo-text{
+  font-family:'Syne',sans-serif; font-weight:800;
+  font-size:clamp(15px,3vw,18px);
+  background:linear-gradient(135deg,var(--text),var(--accent));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.logo-text em{
+  font-style:normal;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.nav-right{margin-left:auto;display:flex;gap:8px;align-items:center;}
+.btn-ghost-nav{
+  padding:7px 16px; border-radius:9px;
+  background:var(--panel); border:1px solid var(--border2);
+  color:var(--text2); font-size:13px; font-weight:500;
+  text-decoration:none; transition:all 0.2s;
+}
+.btn-ghost-nav:hover{color:var(--text);}
+.btn-primary-nav{
+  padding:7px 18px; border-radius:9px;
+  background:linear-gradient(135deg,var(--accent),#9b90ff);
+  color:white; font-size:13px; font-weight:700;
+  text-decoration:none; font-family:'Syne',sans-serif;
+  box-shadow:0 4px 16px var(--glow); transition:all 0.2s;
+}
+.btn-primary-nav:hover{transform:translateY(-1px);}
+
+/* HERO — fills remaining space */
+.hero{
+  position:relative; z-index:1;
+  flex:1; display:flex; align-items:center; justify-content:center;
+  padding:clamp(16px,4vh,40px) clamp(16px,4vw,40px);
+  overflow:hidden;
+}
+.hero-content{
+  max-width:620px; width:100%; text-align:center;
+  animation:fadeUp 0.6s ease both;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.hero-badge{
+  display:inline-block; margin-bottom:clamp(12px,3vh,20px);
+  background:rgba(124,111,255,0.12); border:1px solid rgba(124,111,255,0.25);
+  color:var(--accent); padding:5px 14px; border-radius:20px;
+  font-size:12px; font-weight:600; font-family:'Syne',sans-serif;
+}
+.hero-title{
+  font-family:'Syne',sans-serif; font-weight:800;
+  font-size:clamp(32px,7vw,64px);
+  letter-spacing:-2px; line-height:1.05;
+  margin-bottom:clamp(10px,2vh,18px);
+}
+.hero-title em{
+  font-style:normal;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.hero-sub{
+  color:var(--text2); font-size:clamp(13px,2vw,16px);
+  max-width:480px; margin:0 auto clamp(16px,3vh,28px);
+  line-height:1.7;
+}
+.hero-cta{
+  display:flex; gap:10px; justify-content:center;
+  margin-bottom:clamp(16px,3vh,32px); flex-wrap:wrap;
+}
+.cta-primary{
+  padding:12px 26px; border-radius:12px;
+  background:linear-gradient(135deg,var(--accent),#9b90ff);
+  color:white; font-family:'Syne',sans-serif; font-weight:700;
+  font-size:clamp(13px,2vw,15px);
+  text-decoration:none; box-shadow:0 6px 24px var(--glow);
+  transition:all 0.2s;
+}
+.cta-primary:hover{transform:translateY(-2px);}
+.cta-secondary{
+  padding:12px 22px; border-radius:12px;
+  background:var(--panel); border:1px solid var(--border2);
+  color:var(--text2); font-size:clamp(13px,2vw,15px);
+  text-decoration:none; transition:all 0.2s;
+}
+.cta-secondary:hover{color:var(--text); border-color:var(--accent);}
+
+.hero-stats{
+  display:flex; align-items:center; justify-content:center;
+  gap:clamp(12px,3vw,24px);
+}
+.hs{display:flex; flex-direction:column; align-items:center; gap:2px;}
+.hs-n{font-family:'Syne',sans-serif; font-weight:800; font-size:clamp(16px,3vw,20px); color:var(--text);}
+.hs-l{font-size:11px; color:var(--text3);}
+.hs-div{width:1px; height:28px; background:var(--border2);}
+
+/* Cards preview row */
+.preview-row{
+  display:flex; justify-content:center; gap:10px;
+  margin-bottom:clamp(14px,2.5vh,24px); flex-wrap:wrap;
+}
+.preview-chip{
+  background:var(--panel); border:1px solid var(--border2);
+  border-radius:10px; padding:8px 14px;
+  font-size:12px; color:var(--text2);
+  display:flex; align-items:center; gap:6px;
+}
+.preview-chip span{font-size:16px;}
+
+@media(max-width:480px){
+  .hero-title{letter-spacing:-1px;}
+  .hero-stats{gap:10px;}
+  .hs-n{font-size:16px;}
+  .nav-right .btn-ghost-nav{display:none;}
+}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">
+    <img src="/static/img/logo-small.svg" width="26" height="26" alt="Nexus Social"/>
+    <span class="logo-text">Nexus<em>Social</em></span>
+  </div>
+  <div class="nav-right">
+    <a href="/login" class="btn-ghost-nav">Sign In</a>
+    <a href="/register" class="btn-primary-nav">Get Started ✦</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-content">
+    <div class="hero-badge">✦ Real connections. Real identity.</div>
+    <h1 class="hero-title">Your world,<br><em>connected.</em></h1>
+    <p class="hero-sub">Every member gets a permanent Nexus ID. Find people who match your vibe — same country, same energy.</p>
+
+    <div class="preview-row">
+      <div class="preview-chip"><span>💬</span> Real-time chat</div>
+      <div class="preview-chip"><span>👥</span> Group chats</div>
+      <div class="preview-chip"><span>🌍</span> 47+ countries</div>
+      <div class="preview-chip"><span>🪪</span> Unique Nexus ID</div>
+    </div>
+
+    <div class="hero-cta">
+      <a href="/register" class="cta-primary">Create Your Account ✦</a>
+      <a href="/login" class="cta-secondary">Sign In</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hs"><span class="hs-n">2.4k+</span><span class="hs-l">Members</span></div>
+      <div class="hs-div"></div>
+      <div class="hs"><span class="hs-n">47</span><span class="hs-l">Countries</span></div>
+      <div class="hs-div"></div>
+      <div class="hs"><span class="hs-n">Live</span><span class="hs-l">Real-time</span></div>
     </div>
   </div>
-  <script src="/static/js/landing.js"></script>
+</div>
+<script>
+document.addEventListener('mousemove', (e) => {
+  const el = document.querySelector('body::after');
+  // subtle parallax via CSS custom property
+  document.documentElement.style.setProperty('--mx', `${(e.clientX/window.innerWidth-0.5)*20}px`);
+});
+</script>
 </body>
 </html>
