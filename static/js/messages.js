@@ -1,190 +1,213 @@
-// Nexus Social — Messages & Real-time DMs
+// Nexus Social — Messages (fully fixed)
 let activeDmUser = null;
-let activeGroupId = null;
-let typingTimer = null;
+let typingTimer  = null;
 
 async function loadMessages(opts = {}) {
-  const mc = document.getElementById('mainContent');
-  mc.innerHTML = '';
-  const page = document.createElement('div');
-  page.className = 'page';
-
-  // DM List
-  const dmList = document.createElement('div');
-  dmList.className = 'dm-list';
-  dmList.innerHTML = `
-    <div class="col-header">
-      <div class="col-title">Messages</div>
-      <div class="icon-btn" style="width:28px;height:28px;border-radius:8px;font-size:13px;" onclick="newMessageModal()">✏️</div>
-    </div>
-    <div style="padding:8px 12px;">
-      <div class="search-bar" style="max-width:100%;">
-        <span class="si">🔍</span>
-        <input placeholder="Search conversations…" oninput="filterDms(this.value)" style="font-size:12px;"/>
+  const content = document.getElementById('pageContent');
+  content.innerHTML = `
+    <div class="messages-wrap" id="messagesWrap">
+      <div class="conv-list" id="convList">
+        <div class="page-header" style="padding:12px 14px;">
+          <div class="page-title" style="font-size:15px;">Messages</div>
+          <div class="page-actions">
+            <button class="icon-btn" onclick="newMsgModal()" title="New message" style="width:30px;height:30px;border-radius:8px;font-size:13px;">✏️</button>
+          </div>
+        </div>
+        <div class="conv-search">
+          <div class="conv-search-bar">
+            <span style="color:var(--text3);font-size:13px;">🔍</span>
+            <input placeholder="Search conversations…" oninput="filterConvs(this.value)" />
+          </div>
+        </div>
+        <div class="conv-scroll" id="convScroll">
+          <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">Loading…</div>
+        </div>
+      </div>
+      <div class="chat-panel" id="chatPanel">
+        <div class="chat-empty">
+          <div class="chat-empty-icon">💬</div>
+          <div class="chat-empty-text">Your messages</div>
+          <div class="chat-empty-sub">Select a conversation or start a new one</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="newMsgModal()">New Message ✦</button>
+        </div>
       </div>
     </div>
-    <div class="dm-scroll" id="dmScroll"><div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">Loading…</div></div>
   `;
-
-  // Chat panel
-  const chatPanel = document.createElement('div');
-  chatPanel.className = 'chat-panel';
-  chatPanel.id = 'chatPanel';
-  chatPanel.innerHTML = `
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px;flex-direction:column;gap:10px;">
-      <div style="font-size:40px;">💬</div>
-      <div>Select a conversation to start chatting</div>
-    </div>
-  `;
-
-  page.appendChild(dmList);
-  page.appendChild(chatPanel);
-  mc.appendChild(page);
 
   await loadConversations();
 
   if (opts.openUser) {
-    openDmChat(opts.openUser, opts.openUsername || opts.openUser);
+    openDmChat(opts.openUser, opts.openUsername || '');
   }
 
-  // Socket listeners
   window.onDmMessage = (msg) => {
-    if (activeDmUser && (msg.sender.id === activeDmUser || msg.receiver_id === activeDmUser)) {
-      appendDmBubble(msg);
-    }
+    const isActive = activeDmUser && (msg.sender?.id === activeDmUser || msg.receiver_id === activeDmUser);
+    if (isActive) appendBubble(msg, 'chatMessages');
     loadConversations();
-    updateMsgBadge();
   };
 }
 
 async function loadConversations() {
+  const scroll = document.getElementById('convScroll');
+  if (!scroll) return;
   try {
     const convs = await API.get('/api/messages/conversations');
-    const scroll = document.getElementById('dmScroll');
-    if (!scroll) return;
-    if (!convs.length) {
-      scroll.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">No conversations yet. Search for people to message!</div>';
+
+    if (!convs || !convs.length) {
+      scroll.innerHTML = `
+        <div class="conv-empty">
+          <div class="ce-icon">💬</div>
+          <div class="ce-title">No conversations yet</div>
+          <div class="ce-sub">Add friends and start chatting</div>
+        </div>
+      `;
       return;
     }
+
     scroll.innerHTML = convs.map(c => {
       const g = gradientForString(c.other_username || 'u');
       const init = (c.other_full_name || 'U')[0];
       const flag = c.other_country ? countryFlag(c.other_country) : '';
-      const avImg = `<div class="dm-av ${g}" style="position:relative;">${init}</div>`;
-      return `<div class="dm-item ${activeDmUser === c.other_user_id ? 'active' : ''}" onclick="openDmChat('${c.other_user_id}','${c.other_username}')">
-        ${avImg}
-        <div class="dm-info">
-          <div class="dm-name">${c.other_full_name} ${flag}<span class="dm-time">${timeAgo(c.last_message_time)}</span></div>
-          <div class="dm-last">${c.last_message || ''}</div>
+      const avHtml = `<div class="conv-av ${g}">${init}</div>`;
+      const isActive = activeDmUser === c.other_user_id;
+      return `
+        <div class="conv-item ${isActive ? 'active' : ''}" id="conv-${c.other_user_id}"
+          onclick="openDmChat('${c.other_user_id}','${c.other_username}')">
+          ${avHtml}
+          <div class="conv-info">
+            <div class="conv-name">
+              ${c.other_full_name} ${flag}
+              <span class="conv-time">${timeAgo(c.last_message_time)}</span>
+            </div>
+            <div class="conv-last">${c.last_message || 'Say hello!'}</div>
+          </div>
+          ${c.unread_count > 0 ? '<div class="conv-unread"></div>' : ''}
         </div>
-        ${c.unread_count > 0 ? '<div class="unread-dot"></div>' : ''}
-      </div>`;
+      `;
     }).join('');
-  } catch(e) {}
+  } catch(e) {
+    if (scroll) scroll.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:12px;">Could not load conversations</div>`;
+  }
 }
 
 async function openDmChat(userId, username) {
   activeDmUser = userId;
-  activeGroupId = null;
 
-  // Update DM list active state
-  document.querySelectorAll('.dm-item').forEach(el => el.classList.remove('active'));
+  // Update active state
+  document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
+  const convEl = document.getElementById(`conv-${userId}`);
+  if (convEl) convEl.classList.add('active');
 
-  const panel = document.getElementById('chatPanel');
-  if (!panel) return;
+  // Mobile: show chat panel
+  if (window.innerWidth <= 768) {
+    document.getElementById('convList')?.classList.add('mobile-hidden');
+    document.getElementById('chatPanel')?.classList.add('mobile-open');
+  }
 
   let profile = null;
   try { profile = await API.get(`/api/users/profile/${userId}`); } catch(e) {}
-  const name = profile ? profile.full_name : username;
-  const g = gradientForString(username || 'u');
-  const init = (name || 'U')[0];
-  const flag = profile?.country ? countryFlag(profile.country) : '';
-  const uid = profile?.nexus_id || '';
 
+  const name  = profile?.full_name || username;
+  const flag  = profile?.country ? countryFlag(profile.country) : '';
+  const uid   = profile?.nexus_id || '';
+  const g     = gradientForString(username || 'u');
+  const init  = (name || 'U')[0];
+  const avHtml = profile?.avatar_url
+    ? `<div class="chat-header-av"><img src="${profile.avatar_url}" alt=""/></div>`
+    : `<div class="chat-header-av ${g}">${init}</div>`;
+
+  const panel = document.getElementById('chatPanel');
+  if (!panel) return;
   panel.innerHTML = `
     <div class="chat-header">
-      <div class="dm-av ${g}" style="width:40px;height:40px;border-radius:12px;font-size:14px;position:relative;">
-        ${profile?.avatar_url ? `<img src="${profile.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;"/>` : init}
-        <div class="f-online" style="position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;background:var(--online);border:2px solid var(--bg);"></div>
-      </div>
+      ${window.innerWidth <= 768 ? `<button class="btn btn-ghost btn-sm" onclick="backToConvList()" style="padding:4px 8px;">←</button>` : ''}
+      ${avHtml}
       <div style="flex:1;">
-        <div class="chat-user-name">${name} ${flag} <span style="font-size:10px;color:var(--text3);font-weight:400;font-family:'DM Sans';">#${uid}</span></div>
-        <div class="chat-status-line">@${username}</div>
+        <div class="chat-user-name">${name} ${flag}
+          <span style="font-size:10px;color:var(--text3);font-weight:400;font-family:'DM Sans';">#${uid}</span>
+        </div>
+        <div class="chat-status">@${username}</div>
       </div>
-      <div style="display:flex;gap:6px;">
-        <div class="icon-btn" style="width:32px;height:32px;border-radius:9px;font-size:13px;" title="Voice call">📞</div>
-        <div class="icon-btn" style="width:32px;height:32px;border-radius:9px;font-size:13px;" onclick="reportUser('${userId}')">⋯</div>
-      </div>
+      <button class="icon-btn" style="width:30px;height:30px;border-radius:8px;font-size:13px;" onclick="viewProfileModal('${userId}')">👤</button>
     </div>
     <div class="chat-messages" id="chatMessages"></div>
-    <div id="typingArea" style="padding:0 18px;min-height:18px;font-size:11px;color:var(--text3);"></div>
+    <div id="typingArea" style="padding:0 16px;min-height:16px;font-size:11px;color:var(--text3);"></div>
     <div class="chat-input-area">
-      <div class="icon-btn" style="width:33px;height:33px;border-radius:9px;font-size:14px;">😊</div>
-      <label class="icon-btn" style="width:33px;height:33px;border-radius:9px;font-size:14px;cursor:pointer;">
+      <label class="icon-btn" style="width:32px;height:32px;border-radius:9px;font-size:14px;cursor:pointer;" title="Send media">
         📎<input type="file" accept="image/*,video/*" style="display:none;" onchange="sendMediaDm(this,'${userId}')"/>
       </label>
-      <input class="chat-input" id="dmInput" placeholder="Message ${name}…" onkeydown="dmKeydown(event,'${userId}')" oninput="emitTyping('${userId}',false)"/>
+      <input class="chat-input" id="dmInput" placeholder="Message ${name}…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDm('${userId}');}"
+        oninput="emitTyping('${userId}',false)"/>
       <button class="send-btn" onclick="sendDm('${userId}')">➤</button>
     </div>
   `;
 
-  await loadDmMessages(userId);
+  await fetchDmHistory(userId);
+
+  window.onTyping = (data) => {
+    const area = document.getElementById('typingArea');
+    if (area) {
+      area.textContent = `${data.username} is typing…`;
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => { if (area) area.textContent = ''; }, 2000);
+    }
+  };
 }
 
-async function loadDmMessages(userId) {
+function backToConvList() {
+  document.getElementById('convList')?.classList.remove('mobile-hidden');
+  document.getElementById('chatPanel')?.classList.remove('mobile-open');
+  activeDmUser = null;
+}
+
+async function fetchDmHistory(userId) {
   try {
     const msgs = await API.get(`/api/messages/dm/${userId}`);
     const container = document.getElementById('chatMessages');
     if (!container) return;
-
     if (!msgs.length) {
-      container.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px;">Say hello to start the conversation ✦</div>`;
+      container.innerHTML = `<div style="text-align:center;color:var(--text3);font-size:12px;padding:24px;">No messages yet. Say hello! ✦</div>`;
       return;
     }
-
-    let html = '<div class="chat-date">Today</div>';
-    msgs.forEach(msg => { html += renderDmBubble(msg); });
-    container.innerHTML = html;
+    container.innerHTML = '<div class="chat-date">Earlier</div>' + msgs.map(m => renderBubbleHtml(m)).join('');
     container.scrollTop = container.scrollHeight;
   } catch(e) {}
 }
 
-function renderDmBubble(msg) {
-  const isMine = msg.sender_id === CURRENT_USER.id || msg.sender?.id === CURRENT_USER.id;
+function renderBubbleHtml(msg) {
+  const isMine = (msg.sender_id || msg.sender?.id) === CURRENT_USER.id;
   const sender = msg.sender || {};
-  const g = gradientForString(sender.username || 'u');
-  const init = (sender.full_name || 'U')[0];
+  const g      = gradientForString(sender.username || 'u');
+  const init   = (sender.full_name || 'U')[0];
   const avHtml = sender.avatar_url
-    ? `<img src="${sender.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;"/>`
-    : init;
+    ? `<div class="msg-av-sm"><img src="${sender.avatar_url}" alt=""/></div>`
+    : `<div class="msg-av-sm ${g}">${init}</div>`;
 
   return `
     <div class="msg-group ${isMine ? 'mine' : ''}">
-      <div class="msg-av ${g}" style="width:26px;height:26px;border-radius:7px;">${avHtml}</div>
+      ${avHtml}
       <div class="msg-bubbles">
         ${msg.content ? `<div class="bubble">${msg.content}</div>` : ''}
-        ${msg.media_url ? `<img class="msg-media" src="${msg.media_url}" alt="media"/>` : ''}
-        <div class="msg-time">${timeAgo(msg.created_at)}${isMine && msg.seen ? ' · Seen ✓✓' : ''}</div>
+        ${msg.media_url ? `<img class="msg-media" src="${msg.media_url}" alt="media" onclick="window.open('${msg.media_url}','_blank')"/>` : ''}
+        <div class="msg-time">${timeAgo(msg.created_at)}${isMine && msg.seen ? ' · Seen ✓' : ''}</div>
       </div>
     </div>
   `;
 }
 
-function appendDmBubble(msg) {
-  const container = document.getElementById('chatMessages');
+function appendBubble(msg, containerId) {
+  const container = document.getElementById(containerId);
   if (!container) return;
   const div = document.createElement('div');
-  div.innerHTML = renderDmBubble(msg);
-  container.appendChild(div.firstElementChild);
-  container.scrollTop = container.scrollHeight;
-}
-
-function dmKeydown(e, userId) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDm(userId); }
+  div.innerHTML = renderBubbleHtml(msg);
+  const el = div.firstElementChild;
+  if (el) { container.appendChild(el); container.scrollTop = container.scrollHeight; }
 }
 
 function sendDm(userId) {
   const input = document.getElementById('dmInput');
+  if (!input) return;
   const content = input.value.trim();
   if (!content) return;
   input.value = '';
@@ -197,47 +220,45 @@ async function sendMediaDm(fileInput, userId) {
   const fd = new FormData();
   fd.append('file', file);
   toast('Uploading…', 'info');
-  const r = await fetch('/api/upload', { method: 'POST', body: fd });
-  const d = await r.json();
-  if (d.url && socket) {
-    socket.emit('dm_message', { receiver_id: userId, media_url: d.url, content: '' });
-  }
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.url && socket) socket.emit('dm_message', { receiver_id: userId, media_url: d.url, content: '' });
+  } catch(e) { toast('Upload failed', 'error'); }
 }
 
 function emitTyping(targetId, isGroup) {
   if (socket) socket.emit('typing', { target_id: targetId, is_group: isGroup });
 }
 
-window.onTyping = (data) => {
-  const area = document.getElementById('typingArea');
-  if (area) {
-    area.textContent = `${data.username} is typing…`;
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(() => { area.textContent = ''; }, 2000);
-  }
-};
+function filterConvs(q) {
+  document.querySelectorAll('.conv-item').forEach(el => {
+    const text = el.textContent.toLowerCase();
+    el.style.display = text.includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
 
-function newMessageModal() {
+function newMsgModal() {
   openModal(`
-    <div class="modal-title">New Message <span class="modal-close" onclick="closeModal()">×</span></div>
-    <div class="fg" style="margin-bottom:14px;">
+    <div class="modal-title">New Message <button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="fg">
       <label class="fl">Search user</label>
-      <input class="fi" id="newMsgSearch" placeholder="@username" oninput="searchForNewMsg(this.value)"/>
+      <input class="fi" id="newMsgQ" placeholder="@username or name…" oninput="searchNewMsg(this.value)" autocomplete="off"/>
     </div>
-    <div id="newMsgResults"></div>
+    <div id="newMsgRes"></div>
   `);
 }
 
-async function searchForNewMsg(q) {
-  if (!q) return;
-  const r = document.getElementById('newMsgResults');
+async function searchNewMsg(q) {
+  if (!q || q.length < 2) return;
+  const res = document.getElementById('newMsgRes');
   try {
     const data = await API.get(`/api/users/search?q=${encodeURIComponent(q)}`);
-    r.innerHTML = data.users.map(u => `
+    res.innerHTML = data.users.map(u => `
       <div class="sr-item" onclick="closeModal();openDmChat('${u.id}','${u.username}')">
         <div class="sr-av ${gradientForString(u.username)}">${(u.full_name||'U')[0]}</div>
         <div><div class="sr-name">${u.full_name}</div><div class="sr-sub">@${u.username}</div></div>
       </div>
-    `).join('') || '<div style="padding:12px;color:var(--text3);font-size:12px;">No users found</div>';
+    `).join('') || '<div class="sr-empty">No users found</div>';
   } catch(e) {}
 }
