@@ -2,10 +2,10 @@ import os
 import re
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -14,7 +14,6 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "nexus-dev-secret-change-this")
-
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -23,7 +22,6 @@ SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -35,20 +33,28 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-
 def get_current_user():
     if "user_id" not in session:
         return None
     res = supabase_admin.table("users").select("*").eq("id", session["user_id"]).single().execute()
     return res.data if res.data else None
 
-
 def generate_nexus_id():
-    """Auto-increment: count users + 1, zero-pad to 6 digits."""
+    """
+    Atomic Nexus ID assignment using a Supabase sequence.
+    This prevents race conditions during concurrent registrations.
+    """
+    try:
+        res = supabase_admin.rpc("next_nexus_id").execute()
+        if res.data is not None:
+            return str(res.data).zfill(6)
+    except Exception as e:
+        app.logger.error(f"next_nexus_id RPC failed: {e}")
+
+    # Fallback: count users + 1 (less safe but works if RPC unavailable)
     res = supabase_admin.table("users").select("id", count="exact").execute()
     count = res.count if res.count else 0
     return str(count + 1).zfill(6)
-
 
 def generate_group_id(name: str) -> str:
     """
@@ -62,6 +68,7 @@ def generate_group_id(name: str) -> str:
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=2))
     base = f"{initials}{total_letters}"
     candidate = f"{base}-{suffix}"
+
     # Ensure uniqueness
     while True:
         exists = supabase_admin.table("groups").select("id").eq("group_code", candidate).execute()
@@ -70,7 +77,6 @@ def generate_group_id(name: str) -> str:
         suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=2))
         candidate = f"{base}-{suffix}"
 
-
 # ─── Auth Routes ─────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -78,7 +84,6 @@ def index():
     if "user_id" in session:
         return redirect(url_for("feed"))
     return render_template("landing.html")
-
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -93,6 +98,10 @@ def register():
         pronouns = data.get("pronouns", "")
         sexuality = data.get("sexuality", "")
         country = data.get("country", "")
+
+        # Validate required fields
+        if not email or not password or not username or not full_name:
+            return jsonify({"error": "All fields are required"}), 400
 
         # Validate username uniqueness
         existing = supabase_admin.table("users").select("id").eq("username", username).execute()
@@ -134,14 +143,13 @@ def register():
         supabase_admin.table("notifications").insert({
             "user_id": auth_user.id,
             "type": "welcome",
-            "content": f"Welcome to Nexus Social, {full_name}! Your Nexus ID is #{nexus_id} 🎉",
+            "content": f"Welcome to Nexus Social, {full_name}! Your Nexus ID is #{nexus_id} ✦",
             "read": False,
         }).execute()
 
         return jsonify({"success": True, "message": "Check your email to confirm your account!"})
 
     return render_template("auth.html", mode="register")
-
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -171,25 +179,29 @@ def login():
             until = profile.get("suspended_until")
             if until:
                 until_dt = datetime.fromisoformat(until.replace("Z", "+00:00"))
-                if datetime.now().astimezone() < until_dt:
-                    return jsonify({"error": f"Your account is suspended until {until_dt.strftime('%Y-%m-%d %H:%M UTC')}"}), 403
+                if datetime.now(timezone.utc) < until_dt:
+                    return jsonify({
+                        "error": f"Your account is suspended until {until_dt.strftime('%Y-%m-%d %H:%M UTC')}"
+                    }), 403
             # Suspension expired — lift it
-            supabase_admin.table("users").update({"is_suspended": False, "suspended_until": None}).eq("id", auth_user.id).execute()
+            supabase_admin.table("users").update({
+                "is_suspended": False,
+                "suspended_until": None
+            }).eq("id", auth_user.id).execute()
 
         session["user_id"] = auth_user.id
         session["username"] = profile["username"]
         session["nexus_id"] = profile["nexus_id"]
+
         return jsonify({"success": True})
 
     return render_template("auth.html", mode="login")
-
 
 @app.route("/logout")
 def logout():
     session.clear()
     supabase.auth.sign_out()
     return redirect(url_for("index"))
-
 
 # ─── Main App Routes ──────────────────────────────────────────────────────────
 
@@ -199,13 +211,11 @@ def feed():
     user = get_current_user()
     return render_template("app.html", user=user, page="feed")
 
-
 @app.route("/messages")
 @login_required
 def messages():
     user = get_current_user()
     return render_template("app.html", user=user, page="messages")
-
 
 @app.route("/groups")
 @login_required
@@ -213,13 +223,11 @@ def groups():
     user = get_current_user()
     return render_template("app.html", user=user, page="groups")
 
-
 @app.route("/notifications")
 @login_required
 def notifications():
     user = get_current_user()
     return render_template("app.html", user=user, page="notifications")
-
 
 @app.route("/profile")
 @app.route("/profile/<username>")
@@ -233,7 +241,6 @@ def profile(username=None):
         profile_user = user
     return render_template("app.html", user=user, profile_user=profile_user, page="profile")
 
-
 # ─── API: Users ───────────────────────────────────────────────────────────────
 
 @app.route("/api/users/search")
@@ -242,6 +249,7 @@ def search_users():
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify([])
+
     # Search by username or group code
     users = supabase_admin.table("users").select(
         "id,nexus_id,username,full_name,avatar_url,country,pronouns"
@@ -253,7 +261,6 @@ def search_users():
 
     return jsonify({"users": users.data or [], "groups": groups.data or []})
 
-
 @app.route("/api/users/profile/<user_id>")
 @login_required
 def get_profile(user_id):
@@ -261,7 +268,6 @@ def get_profile(user_id):
         "id,nexus_id,username,full_name,avatar_url,bio,country,pronouns,sexuality,gender,personal_links,created_at"
     ).eq("id", user_id).single().execute()
     return jsonify(res.data or {})
-
 
 @app.route("/api/users/update-profile", methods=["POST"])
 @login_required
@@ -276,10 +282,11 @@ def update_profile():
             return jsonify({"error": "Username taken"}), 400
 
     supabase_admin.table("users").update(update_data).eq("id", session["user_id"]).execute()
+
     if "username" in update_data:
         session["username"] = update_data["username"]
-    return jsonify({"success": True})
 
+    return jsonify({"success": True})
 
 @app.route("/api/users/delete-account", methods=["DELETE"])
 @login_required
@@ -290,7 +297,6 @@ def delete_account():
     session.clear()
     return jsonify({"success": True})
 
-
 # ─── API: Friends ─────────────────────────────────────────────────────────────
 
 @app.route("/api/friends/request", methods=["POST"])
@@ -298,7 +304,10 @@ def delete_account():
 def send_friend_request():
     data = request.get_json()
     receiver_id = data.get("receiver_id")
-    existing = supabase_admin.table("friendships").select("id").eq("sender_id", session["user_id"]).eq("receiver_id", receiver_id).execute()
+
+    existing = supabase_admin.table("friendships").select("id").eq(
+        "sender_id", session["user_id"]
+    ).eq("receiver_id", receiver_id).execute()
     if existing.data:
         return jsonify({"error": "Request already sent"}), 400
 
@@ -319,7 +328,6 @@ def send_friend_request():
 
     return jsonify({"success": True})
 
-
 @app.route("/api/friends/respond", methods=["POST"])
 @login_required
 def respond_friend_request():
@@ -334,7 +342,6 @@ def respond_friend_request():
 
     return jsonify({"success": True})
 
-
 @app.route("/api/friends/list")
 @login_required
 def get_friends():
@@ -344,7 +351,6 @@ def get_friends():
     ).or_(f"sender_id.eq.{uid},receiver_id.eq.{uid}").eq("status", "accepted").execute()
     return jsonify(res.data or [])
 
-
 # ─── API: Messages ────────────────────────────────────────────────────────────
 
 @app.route("/api/messages/request", methods=["POST"])
@@ -352,13 +358,14 @@ def get_friends():
 def send_message_request():
     data = request.get_json()
     receiver_id = data.get("receiver_id")
+
     supabase_admin.table("message_requests").insert({
         "sender_id": session["user_id"],
         "receiver_id": receiver_id,
         "status": "pending"
     }).execute()
-    return jsonify({"success": True})
 
+    return jsonify({"success": True})
 
 @app.route("/api/messages/dm/<other_user_id>")
 @login_required
@@ -369,19 +376,20 @@ def get_dm(other_user_id):
     ).or_(
         f"and(sender_id.eq.{uid},receiver_id.eq.{other_user_id}),and(sender_id.eq.{other_user_id},receiver_id.eq.{uid})"
     ).order("created_at").execute()
-    # Mark as seen
-    supabase_admin.table("direct_messages").update({"seen": True}).eq("receiver_id", uid).eq("sender_id", other_user_id).execute()
-    return jsonify(res.data or [])
 
+    # Mark as seen
+    supabase_admin.table("direct_messages").update({"seen": True}).eq(
+        "receiver_id", uid
+    ).eq("sender_id", other_user_id).execute()
+
+    return jsonify(res.data or [])
 
 @app.route("/api/messages/conversations")
 @login_required
 def get_conversations():
     uid = session["user_id"]
-    # Get unique conversation partners
     res = supabase_admin.rpc("get_conversations", {"p_user_id": uid}).execute()
     return jsonify(res.data or [])
-
 
 # ─── API: Groups ─────────────────────────────────────────────────────────────
 
@@ -389,7 +397,9 @@ def get_conversations():
 @login_required
 def create_group():
     # Check if groups enabled
-    setting = supabase_admin.table("platform_settings").select("value").eq("key", "groups_enabled").single().execute()
+    setting = supabase_admin.table("platform_settings").select("value").eq(
+        "key", "groups_enabled"
+    ).single().execute()
     if setting.data and setting.data.get("value") == "false":
         return jsonify({"error": "Group creation is currently disabled"}), 403
 
@@ -401,8 +411,7 @@ def create_group():
     data = request.get_json()
     name = data.get("name", "").strip()
     description = data.get("description", "")
-    banner_emoji = data.get("banner_emoji", "💬")
-
+    banner_emoji = data.get("banner_emoji", "")
     group_code = generate_group_id(name)
 
     group_res = supabase_admin.table("groups").insert({
@@ -413,7 +422,6 @@ def create_group():
         "owner_id": session["user_id"],
         "member_count": 1,
     }).execute()
-
     group_id = group_res.data[0]["id"]
 
     # Add owner as member
@@ -425,17 +433,19 @@ def create_group():
 
     return jsonify({"success": True, "group_code": group_code, "group_id": group_id})
 
-
 @app.route("/api/groups/join", methods=["POST"])
 @login_required
 def join_group():
     data = request.get_json()
     group_code = data.get("group_code")
+
     group = supabase_admin.table("groups").select("*").eq("group_code", group_code).single().execute()
     if not group.data:
         return jsonify({"error": "Group not found"}), 404
 
-    existing = supabase_admin.table("group_members").select("id").eq("group_id", group.data["id"]).eq("user_id", session["user_id"]).execute()
+    existing = supabase_admin.table("group_members").select("id").eq(
+        "group_id", group.data["id"]
+    ).eq("user_id", session["user_id"]).execute()
     if existing.data:
         return jsonify({"error": "Already a member"}), 400
 
@@ -445,9 +455,11 @@ def join_group():
         "role": "member",
     }).execute()
 
-    supabase_admin.table("groups").update({"member_count": group.data["member_count"] + 1}).eq("id", group.data["id"]).execute()
-    return jsonify({"success": True})
+    supabase_admin.table("groups").update({
+        "member_count": group.data["member_count"] + 1
+    }).eq("id", group.data["id"]).execute()
 
+    return jsonify({"success": True})
 
 @app.route("/api/groups/<group_id>/messages")
 @login_required
@@ -457,7 +469,6 @@ def get_group_messages(group_id):
     ).eq("group_id", group_id).order("created_at").limit(50).execute()
     return jsonify(res.data or [])
 
-
 @app.route("/api/groups/<group_id>/members")
 @login_required
 def get_group_members(group_id):
@@ -466,43 +477,48 @@ def get_group_members(group_id):
     ).eq("group_id", group_id).execute()
     return jsonify(res.data or [])
 
-
 @app.route("/api/groups/discover")
 @login_required
 def discover_groups():
     res = supabase_admin.table("groups").select("*").order("member_count", desc=True).limit(20).execute()
     return jsonify(res.data or [])
 
-
 # ─── API: Notifications ───────────────────────────────────────────────────────
 
 @app.route("/api/notifications")
 @login_required
 def get_notifications():
-    res = supabase_admin.table("notifications").select("*").eq("user_id", session["user_id"]).order("created_at", desc=True).limit(30).execute()
+    res = supabase_admin.table("notifications").select("*").eq(
+        "user_id", session["user_id"]
+    ).order("created_at", desc=True).limit(30).execute()
     return jsonify(res.data or [])
-
 
 @app.route("/api/notifications/read-all", methods=["POST"])
 @login_required
 def mark_all_read():
-    supabase_admin.table("notifications").update({"read": True}).eq("user_id", session["user_id"]).execute()
+    supabase_admin.table("notifications").update({"read": True}).eq(
+        "user_id", session["user_id"]
+    ).execute()
     return jsonify({"success": True})
-
 
 @app.route("/api/notifications/<notif_id>/resolve", methods=["POST"])
 @login_required
 def resolve_notification(notif_id):
     """Mark a notification as resolved so action buttons disappear."""
-    # Verify ownership
-    notif = supabase_admin.table("notifications").select("user_id,meta").eq("id", notif_id).single().execute()
+    notif = supabase_admin.table("notifications").select("user_id,meta").eq(
+        "id", notif_id
+    ).single().execute()
     if not notif.data or notif.data["user_id"] != session["user_id"]:
         return jsonify({"error": "Not found"}), 404
+
     meta = notif.data.get("meta") or {}
     meta["resolved"] = True
-    supabase_admin.table("notifications").update({"read": True, "meta": meta}).eq("id", notif_id).execute()
-    return jsonify({"success": True})
+    supabase_admin.table("notifications").update({
+        "read": True,
+        "meta": meta
+    }).eq("id", notif_id).execute()
 
+    return jsonify({"success": True})
 
 @app.route("/api/friends/pending")
 @login_required
@@ -510,9 +526,9 @@ def get_pending_friends():
     """Return pending friend requests received by current user."""
     uid = session["user_id"]
     res = supabase_admin.table("friendships").select("*").eq(
-        "receiver_id", uid).eq("status", "pending").execute()
+        "receiver_id", uid
+    ).eq("status", "pending").execute()
     return jsonify(res.data or [])
-
 
 # ─── API: Suggestions ─────────────────────────────────────────────────────────
 
@@ -520,20 +536,20 @@ def get_pending_friends():
 @login_required
 def get_suggestions():
     """Return people you may know based on shared attributes."""
-    uid  = session["user_id"]
+    uid = session["user_id"]
     user = get_current_user()
     if not user:
         return jsonify([])
 
     # Get existing friends/requests to exclude
-    sent     = supabase_admin.table("friendships").select("receiver_id").eq("sender_id", uid).execute()
+    sent = supabase_admin.table("friendships").select("receiver_id").eq("sender_id", uid).execute()
     received = supabase_admin.table("friendships").select("sender_id").eq("receiver_id", uid).execute()
-    exclude  = {uid}
+    exclude = {uid}
     exclude.update(r["receiver_id"] for r in (sent.data or []))
-    exclude.update(r["sender_id"]   for r in (received.data or []))
+    exclude.update(r["sender_id"] for r in (received.data or []))
 
     suggestions = []
-    seen_ids    = set()
+    seen_ids = set()
 
     def add_suggestion(u, reasons):
         if u["id"] in seen_ids or u["id"] in exclude:
@@ -547,33 +563,36 @@ def get_suggestions():
     # Same country
     if user.get("country"):
         res = supabase_admin.table("users").select(fields).eq(
-            "country", user["country"]).neq("id", uid).limit(12).execute()
+            "country", user["country"]
+        ).neq("id", uid).limit(12).execute()
         for u in (res.data or []):
             add_suggestion(u, ["country"])
 
     # Same sexuality
     if user.get("sexuality") and user["sexuality"] not in ("Prefer not to say", ""):
         res = supabase_admin.table("users").select(fields).eq(
-            "sexuality", user["sexuality"]).neq("id", uid).limit(8).execute()
+            "sexuality", user["sexuality"]
+        ).neq("id", uid).limit(8).execute()
         for u in (res.data or []):
             add_suggestion(u, ["sexuality"])
 
     # Same gender
     if user.get("gender"):
         res = supabase_admin.table("users").select(fields).eq(
-            "gender", user["gender"]).neq("id", uid).limit(6).execute()
+            "gender", user["gender"]
+        ).neq("id", uid).limit(6).execute()
         for u in (res.data or []):
             add_suggestion(u, ["gender"])
 
     # Fill with recent users if still few results
     if len(suggestions) < 8:
         res = supabase_admin.table("users").select(fields).neq(
-            "id", uid).order("created_at", desc=True).limit(20).execute()
+            "id", uid
+        ).order("created_at", desc=True).limit(20).execute()
         for u in (res.data or []):
             add_suggestion(u, ["new"])
 
     return jsonify(suggestions[:24])
-
 
 # ─── API: Posts ───────────────────────────────────────────────────────────────
 
@@ -583,6 +602,7 @@ def create_post():
     data = request.get_json()
     content = data.get("content", "").strip()
     media_url = data.get("media_url")
+
     if not content and not media_url:
         return jsonify({"error": "Post cannot be empty"}), 400
 
@@ -593,8 +613,8 @@ def create_post():
         "likes_count": 0,
         "comments_count": 0,
     }).execute()
-    return jsonify({"success": True, "post": res.data[0]})
 
+    return jsonify({"success": True, "post": res.data[0]})
 
 @app.route("/api/posts/feed")
 @login_required
@@ -604,19 +624,26 @@ def get_feed():
     ).order("created_at", desc=True).limit(20).execute()
     return jsonify(res.data or [])
 
-
 @app.route("/api/posts/<post_id>/like", methods=["POST"])
 @login_required
 def like_post(post_id):
-    existing = supabase_admin.table("post_likes").select("id").eq("post_id", post_id).eq("user_id", session["user_id"]).execute()
+    existing = supabase_admin.table("post_likes").select("id").eq(
+        "post_id", post_id
+    ).eq("user_id", session["user_id"]).execute()
+
     if existing.data:
-        supabase_admin.table("post_likes").delete().eq("post_id", post_id).eq("user_id", session["user_id"]).execute()
+        supabase_admin.table("post_likes").delete().eq("post_id", post_id).eq(
+            "user_id", session["user_id"]
+        ).execute()
         supabase_admin.rpc("decrement_likes", {"post_id": post_id}).execute()
         return jsonify({"liked": False})
-    supabase_admin.table("post_likes").insert({"post_id": post_id, "user_id": session["user_id"]}).execute()
+
+    supabase_admin.table("post_likes").insert({
+        "post_id": post_id,
+        "user_id": session["user_id"]
+    }).execute()
     supabase_admin.rpc("increment_likes", {"post_id": post_id}).execute()
     return jsonify({"liked": True})
-
 
 # ─── API: Reports ─────────────────────────────────────────────────────────────
 
@@ -634,7 +661,6 @@ def submit_report():
     }).execute()
     return jsonify({"success": True})
 
-
 # ─── API: Media Upload ────────────────────────────────────────────────────────
 
 @app.route("/api/upload", methods=["POST"])
@@ -648,16 +674,19 @@ def upload_media():
         return jsonify({"error": "File exceeds 20MB limit"}), 400
 
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
-    filename = f"{session['user_id']}/{datetime.utcnow().timestamp()}.{ext}"
+    filename = f"{session['user_id']}/{datetime.now(timezone.utc).timestamp()}.{ext}"
 
     file_bytes = file.read()
     if len(file_bytes) > 20 * 1024 * 1024:
         return jsonify({"error": "File exceeds 20MB limit"}), 400
 
-    res = supabase_admin.storage.from_("media").upload(filename, file_bytes, {"content-type": file.content_type})
+    res = supabase_admin.storage.from_("media").upload(
+        filename,
+        file_bytes,
+        {"content-type": file.content_type}
+    )
     url = supabase_admin.storage.from_("media").get_public_url(filename)
     return jsonify({"url": url})
-
 
 # ─── Socket.IO — Real-time ────────────────────────────────────────────────────
 
@@ -667,19 +696,19 @@ def on_connect():
         join_room(f"user_{session['user_id']}")
         emit("connected", {"user_id": session["user_id"]})
 
-
 @socketio.on("join_group")
 def on_join_group(data):
     group_id = data.get("group_id")
     join_room(f"group_{group_id}")
-    emit("user_joined", {"user_id": session.get("user_id"), "username": session.get("username")}, to=f"group_{group_id}")
-
+    emit("user_joined", {
+        "user_id": session.get("user_id"),
+        "username": session.get("username")
+    }, to=f"group_{group_id}")
 
 @socketio.on("leave_group")
 def on_leave_group(data):
     group_id = data.get("group_id")
     leave_room(f"group_{group_id}")
-
 
 @socketio.on("group_message")
 def on_group_message(data):
@@ -695,7 +724,9 @@ def on_group_message(data):
         return
 
     # Verify membership
-    member = supabase_admin.table("group_members").select("id").eq("group_id", group_id).eq("user_id", uid).execute()
+    member = supabase_admin.table("group_members").select("id").eq(
+        "group_id", group_id
+    ).eq("user_id", uid).execute()
     if not member.data:
         return
 
@@ -706,7 +737,9 @@ def on_group_message(data):
         "media_url": media_url,
     }).execute()
 
-    user = supabase_admin.table("users").select("id,username,full_name,avatar_url,country").eq("id", uid).single().execute()
+    user = supabase_admin.table("users").select(
+        "id,username,full_name,avatar_url,country"
+    ).eq("id", uid).single().execute()
 
     emit("new_group_message", {
         "id": msg.data[0]["id"],
@@ -716,7 +749,6 @@ def on_group_message(data):
         "sender": user.data,
         "created_at": msg.data[0]["created_at"],
     }, to=f"group_{group_id}")
-
 
 @socketio.on("dm_message")
 def on_dm_message(data):
@@ -736,7 +768,9 @@ def on_dm_message(data):
         "seen": False,
     }).execute()
 
-    user = supabase_admin.table("users").select("id,username,full_name,avatar_url,country").eq("id", uid).single().execute()
+    user = supabase_admin.table("users").select(
+        "id,username,full_name,avatar_url,country"
+    ).eq("id", uid).single().execute()
 
     payload = {
         "id": msg.data[0]["id"],
@@ -750,19 +784,19 @@ def on_dm_message(data):
     emit("new_dm", payload, to=f"user_{receiver_id}")
     emit("new_dm", payload, to=f"user_{uid}")
 
-
 @socketio.on("typing")
 def on_typing(data):
     target = data.get("target_id")
     is_group = data.get("is_group", False)
     room = f"group_{target}" if is_group else f"user_{target}"
-    emit("user_typing", {"user_id": session.get("user_id"), "username": session.get("username")}, to=room, include_self=False)
-
+    emit("user_typing", {
+        "user_id": session.get("user_id"),
+        "username": session.get("username")
+    }, to=room, include_self=False)
 
 @socketio.on("disconnect")
 def on_disconnect():
     pass
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
