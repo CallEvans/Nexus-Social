@@ -1,17 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#7c6fff"/>
       <stop offset="100%" style="stop-color:#ff6b9d"/>
     </linearGradient>
-    <linearGradient id="fg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95"/>
-      <stop offset="100%" style="stop-color:#e8d9ff;stop-opacity:0.95"/>
-    </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
-  <rect x="14" y="16" width="7" height="32" rx="2" fill="url(#fg)"/>
-  <rect x="43" y="16" width="7" height="32" rx="2" fill="url(#fg)"/>
-  <polygon points="21,16 28,16 50,48 43,48" fill="url(#fg)"/>
-  <circle cx="52" cy="14" r="4" fill="#ffffff" opacity="0.85"/>
+  <rect width="32" height="32" rx="7" fill="url(#g)"/>
+  <text x="16" y="22" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold" font-size="18">✦</text>
 </svg>
