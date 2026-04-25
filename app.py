@@ -60,7 +60,6 @@ def generate_group_id(name: str) -> str:
     """
     Generate group ID: initials of each capitalised word + total letter count
     + dash + 2 random alphanumeric chars.
-    e.g. 'Friends Together' → FT15-X4
     """
     words = [w for w in name.split() if w]
     initials = "".join(w[0].upper() for w in words)
@@ -69,7 +68,6 @@ def generate_group_id(name: str) -> str:
     base = f"{initials}{total_letters}"
     candidate = f"{base}-{suffix}"
 
-    # Ensure uniqueness
     while True:
         exists = supabase_admin.table("groups").select("id").eq("group_code", candidate).execute()
         if not exists.data:
@@ -99,16 +97,13 @@ def register():
         sexuality = data.get("sexuality", "")
         country = data.get("country", "")
 
-        # Validate required fields
         if not email or not password or not username or not full_name:
             return jsonify({"error": "All fields are required"}), 400
 
-        # Validate username uniqueness
         existing = supabase_admin.table("users").select("id").eq("username", username).execute()
         if existing.data:
             return jsonify({"error": "Username already taken"}), 400
 
-        # Create auth user via Supabase Auth
         try:
             auth_res = supabase.auth.sign_up({"email": email, "password": password})
             auth_user = auth_res.user
@@ -119,7 +114,6 @@ def register():
 
         nexus_id = generate_nexus_id()
 
-        # Insert into users table
         supabase_admin.table("users").insert({
             "id": auth_user.id,
             "nexus_id": nexus_id,
@@ -139,7 +133,6 @@ def register():
             "suspended_until": None,
         }).execute()
 
-        # Create welcome notification
         supabase_admin.table("notifications").insert({
             "user_id": auth_user.id,
             "type": "welcome",
@@ -154,46 +147,53 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        data = request.get_json() or request.form
-        email = data.get("email", "").strip().lower()
-        password = data.get("password", "")
-
         try:
+            data = request.get_json() or request.form
+            email = data.get("email", "").strip().lower()
+            password = data.get("password", "")
+
+            # Authenticate via Supabase Auth
             res = supabase.auth.sign_in_with_password({"email": email, "password": password})
             auth_user = res.user
             if not auth_user:
                 return jsonify({"error": "Invalid credentials"}), 401
+
+            # Fetch profile with admin client (service key) - wrapped for error details
+            try:
+                user = supabase_admin.table("users").select("*").eq("id", auth_user.id).single().execute()
+            except Exception as profile_err:
+                app.logger.error(f"Profile fetch failed for {auth_user.id}: {profile_err}")
+                return jsonify({"error": "Unable to load your profile. Please try again later."}), 500
+
+            if not user.data:
+                return jsonify({"error": "Account not found. Did you complete registration?"}), 404
+
+            profile = user.data
+            if profile.get("is_banned"):
+                return jsonify({"error": "Your account has been permanently banned."}), 403
+
+            if profile.get("is_suspended"):
+                until = profile.get("suspended_until")
+                if until:
+                    until_dt = datetime.fromisoformat(until.replace("Z", "+00:00"))
+                    if datetime.now(timezone.utc) < until_dt:
+                        return jsonify({
+                            "error": f"Your account is suspended until {until_dt.strftime('%Y-%m-%d %H:%M UTC')}"
+                        }), 403
+                # lift suspension
+                supabase_admin.table("users").update({
+                    "is_suspended": False,
+                    "suspended_until": None
+                }).eq("id", auth_user.id).execute()
+
+            session["user_id"] = auth_user.id
+            session["username"] = profile["username"]
+            session["nexus_id"] = profile["nexus_id"]
+            return jsonify({"success": True})
+
         except Exception as e:
-            return jsonify({"error": "Invalid email or password"}), 401
-
-        # Check if banned/suspended
-        user = supabase_admin.table("users").select("*").eq("id", auth_user.id).single().execute()
-        if not user.data:
-            return jsonify({"error": "Account not found"}), 404
-
-        profile = user.data
-        if profile.get("is_banned"):
-            return jsonify({"error": "Your account has been permanently banned."}), 403
-
-        if profile.get("is_suspended"):
-            until = profile.get("suspended_until")
-            if until:
-                until_dt = datetime.fromisoformat(until.replace("Z", "+00:00"))
-                if datetime.now(timezone.utc) < until_dt:
-                    return jsonify({
-                        "error": f"Your account is suspended until {until_dt.strftime('%Y-%m-%d %H:%M UTC')}"
-                    }), 403
-            # Suspension expired — lift it
-            supabase_admin.table("users").update({
-                "is_suspended": False,
-                "suspended_until": None
-            }).eq("id", auth_user.id).execute()
-
-        session["user_id"] = auth_user.id
-        session["username"] = profile["username"]
-        session["nexus_id"] = profile["nexus_id"]
-
-        return jsonify({"success": True})
+            app.logger.error(f"Login error: {str(e)}", exc_info=True)
+            return jsonify({"error": "Login failed. Please check credentials or try again later."}), 500
 
     return render_template("auth.html", mode="login")
 
@@ -250,7 +250,6 @@ def search_users():
     if not q:
         return jsonify([])
 
-    # Search by username or group code
     users = supabase_admin.table("users").select(
         "id,nexus_id,username,full_name,avatar_url,country,pronouns"
     ).ilike("username", f"%{q}%").limit(10).execute()
@@ -333,7 +332,7 @@ def send_friend_request():
 def respond_friend_request():
     data = request.get_json()
     friendship_id = data.get("friendship_id")
-    action = data.get("action")  # "accept" or "decline"
+    action = data.get("action")
 
     if action == "accept":
         supabase_admin.table("friendships").update({"status": "accepted"}).eq("id", friendship_id).execute()
@@ -377,7 +376,6 @@ def get_dm(other_user_id):
         f"and(sender_id.eq.{uid},receiver_id.eq.{other_user_id}),and(sender_id.eq.{other_user_id},receiver_id.eq.{uid})"
     ).order("created_at").execute()
 
-    # Mark as seen
     supabase_admin.table("direct_messages").update({"seen": True}).eq(
         "receiver_id", uid
     ).eq("sender_id", other_user_id).execute()
@@ -396,14 +394,12 @@ def get_conversations():
 @app.route("/api/groups/create", methods=["POST"])
 @login_required
 def create_group():
-    # Check if groups enabled
     setting = supabase_admin.table("platform_settings").select("value").eq(
         "key", "groups_enabled"
     ).single().execute()
     if setting.data and setting.data.get("value") == "false":
         return jsonify({"error": "Group creation is currently disabled"}), 403
 
-    # Check user permission
     user = get_current_user()
     if not user.get("can_create_groups", True):
         return jsonify({"error": "You don't have permission to create groups"}), 403
@@ -424,7 +420,6 @@ def create_group():
     }).execute()
     group_id = group_res.data[0]["id"]
 
-    # Add owner as member
     supabase_admin.table("group_members").insert({
         "group_id": group_id,
         "user_id": session["user_id"],
@@ -504,7 +499,6 @@ def mark_all_read():
 @app.route("/api/notifications/<notif_id>/resolve", methods=["POST"])
 @login_required
 def resolve_notification(notif_id):
-    """Mark a notification as resolved so action buttons disappear."""
     notif = supabase_admin.table("notifications").select("user_id,meta").eq(
         "id", notif_id
     ).single().execute()
@@ -523,7 +517,6 @@ def resolve_notification(notif_id):
 @app.route("/api/friends/pending")
 @login_required
 def get_pending_friends():
-    """Return pending friend requests received by current user."""
     uid = session["user_id"]
     res = supabase_admin.table("friendships").select("*").eq(
         "receiver_id", uid
@@ -535,13 +528,11 @@ def get_pending_friends():
 @app.route("/api/suggestions")
 @login_required
 def get_suggestions():
-    """Return people you may know based on shared attributes."""
     uid = session["user_id"]
     user = get_current_user()
     if not user:
         return jsonify([])
 
-    # Get existing friends/requests to exclude
     sent = supabase_admin.table("friendships").select("receiver_id").eq("sender_id", uid).execute()
     received = supabase_admin.table("friendships").select("sender_id").eq("receiver_id", uid).execute()
     exclude = {uid}
@@ -560,7 +551,6 @@ def get_suggestions():
 
     fields = "id,nexus_id,username,full_name,avatar_url,bio,country,pronouns,sexuality,gender"
 
-    # Same country
     if user.get("country"):
         res = supabase_admin.table("users").select(fields).eq(
             "country", user["country"]
@@ -568,7 +558,6 @@ def get_suggestions():
         for u in (res.data or []):
             add_suggestion(u, ["country"])
 
-    # Same sexuality
     if user.get("sexuality") and user["sexuality"] not in ("Prefer not to say", ""):
         res = supabase_admin.table("users").select(fields).eq(
             "sexuality", user["sexuality"]
@@ -576,7 +565,6 @@ def get_suggestions():
         for u in (res.data or []):
             add_suggestion(u, ["sexuality"])
 
-    # Same gender
     if user.get("gender"):
         res = supabase_admin.table("users").select(fields).eq(
             "gender", user["gender"]
@@ -584,7 +572,6 @@ def get_suggestions():
         for u in (res.data or []):
             add_suggestion(u, ["gender"])
 
-    # Fill with recent users if still few results
     if len(suggestions) < 8:
         res = supabase_admin.table("users").select(fields).neq(
             "id", uid
@@ -723,7 +710,6 @@ def on_group_message(data):
     if not uid:
         return
 
-    # Verify membership
     member = supabase_admin.table("group_members").select("id").eq(
         "group_id", group_id
     ).eq("user_id", uid).execute()
