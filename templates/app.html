@@ -27,7 +27,8 @@
   </div>
 
   <div class="sidebar-user sidebar-label">
-    <div class="s-av {% if user %}g{{ loop.index0 % 8 + 1 }}{% endif %}" id="sidebarAv">
+    <!-- FIX: replaced loop.index0 with a safe expression -->
+    <div class="s-av {% if user %}g{{ user.full_name|length % 8 + 1 }}{% endif %}" id="sidebarAv">
       {% if user and user.avatar_url %}
       <img src="{{ user.avatar_url }}" alt="av"/>
       {% else %}
